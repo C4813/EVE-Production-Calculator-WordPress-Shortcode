@@ -1,0 +1,22 @@
+.component-block {
+    border: 1px solid #ccc;
+    padding: 12px 15px;
+    margin: 20px 0;
+    background-color: #fefefe;
+    border-radius: 8px;
+    box-shadow: 1px 1px 5px rgba(0,0,0,0.1);
+}
+
+.indented-material {
+    line-height: 1.5;
+}
+
+.depth-1 {
+    margin-left: 20px;
+}
+.depth-2 {
+    margin-left: 40px;
+}
+.depth-3 {
+    margin-left: 60px;
+}
