@@ -17,5 +17,5 @@ This is going to be a long-term project for me to work on here and there, unlike
 **Stretch Goals (Not sure if I can manage this)**
 - [ ] Optimal Ores to Mine/Buy for reprocessing
     - [ ] ISK efficient (minimal amount of ISK invested after waste minerals are sold off)
-    - [ ] Mineral efficient (minimal amount of waste product
+    - [ ] Mineral efficient (minimal amount of waste minerals after the build)
     - [ ] Include/Exclude Abyssall/A0/High-Sec/Low-Sec/Null-Sec Ore
