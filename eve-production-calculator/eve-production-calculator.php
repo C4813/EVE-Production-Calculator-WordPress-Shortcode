@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: EVE Production Calculator
-Description: Allows users to input an item name and see required manufacturing materials using static JSON files.
+Description: Adds a shortcode [eve_production_calculator] which allows users to see the build requirements for any blueprint in EVE Online.
 Version: 0.3
 Author: C4813
 */
