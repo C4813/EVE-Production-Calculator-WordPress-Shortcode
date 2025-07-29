@@ -7,6 +7,7 @@ Currently only lists the base input materials as if you "show info" on the bluep
 This is going to be a long-term project for me to work on here and there, unlike the other shortcodes I've spent some time on recently.
 
 **Planned features:**
+- [ ] Color-coding results to easily identify minerals, PI, reactions etc.
 - [ ] Structure input, including automatic ME and TE calculations and job costs
 - [ ] Duration, including all relevent skills, implants, and (above) structure calculations
 - [ ] Desired QTY
