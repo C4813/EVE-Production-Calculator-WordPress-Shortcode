@@ -2,7 +2,7 @@
 /*
 Plugin Name: EVE Production Calculator
 Description: Adds a shortcode [eve_production_calculator] which allows users to see the build requirements for any blueprint in EVE Online.
-Version: 0.3
+Version: 0.3.1
 Author: C4813
 */
 
@@ -102,12 +102,10 @@ function eve_production_calculator_shortcode() {
             }
 
             const hasExtraLayers = materials.some(mat => {
-                // Check direct manufacturing materials
                 let nested = materialMap[mat.materialTypeID];
                 if (nested && nested.some(nm => nm.activityID === 1 && nm.quantity > 0)) {
                     return true;
                 }
-                // Check blueprint materials if direct none found
                 const matName = typeIDToName[mat.materialTypeID];
                 if (!matName) return false;
                 const blueprintName = matName + " Blueprint";
@@ -127,7 +125,7 @@ function eve_production_calculator_shortcode() {
             resolveBtnDiv.style.display = hasExtraLayers ? 'block' : 'none';
         }
 
-        async function getIndentedMaterialsHTML(typeID, multiplier, depth = 1) {
+        async function getIndentedMaterialsHTML(typeID, multiplier, depth = 1, isFirst = true) {
             let materials = materialMap[typeID]?.filter(m => m.activityID === 1);
 
             if ((!materials || materials.length === 0) && typeIDToName[typeID]) {
@@ -141,13 +139,28 @@ function eve_production_calculator_shortcode() {
             if (!materials || materials.length === 0) return '';
 
             let html = '';
-            for (const mat of materials) {
+            for (let i = 0; i < materials.length; i++) {
+                const mat = materials[i];
                 const matID = mat.materialTypeID;
                 const qty = mat.quantity * multiplier;
                 const name = typeIDToName[matID] || `Type ID: ${matID}`;
 
-                html += `<div class="indented-material depth-${depth}">${name} x${qty.toLocaleString()}</div>`;
-                html += await getIndentedMaterialsHTML(matID, qty, depth + 1);
+            let hasChildren = false;
+            let nestedMaterials = materialMap[matID]?.filter(m => m.activityID === 1);
+            if ((!nestedMaterials || nestedMaterials.length === 0) && typeIDToName[matID]) {
+                const blueprintName = typeIDToName[matID] + " Blueprint";
+                const blueprintID = nameToID[blueprintName] ? parseInt(nameToID[blueprintName]) : null;
+                if (blueprintID) {
+                    nestedMaterials = materialMap[blueprintID]?.filter(m => m.activityID === 1);
+                }
+            }
+            if (nestedMaterials && nestedMaterials.length > 0) {
+                hasChildren = true;
+            }
+            
+            const parentClass = (hasChildren && depth === 1) ? ' has-children' : '';
+            html += `<div class="indented-material depth-${depth}${parentClass}">${name} x${qty.toLocaleString()}</div>`;
+                html += await getIndentedMaterialsHTML(matID, qty, depth + 1, false);
             }
             return html;
         }
