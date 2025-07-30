@@ -7,10 +7,43 @@
     box-shadow: 1px 1px 5px rgba(0,0,0,0.1);
 }
 
-.indented-material {
+.eve-materials-container input[type="text"] {
+    padding: 8px;
+    width: 60%;
+    max-width: 400px;
+    margin-right: 8px;
+    font-size: 1em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.eve-materials-container button {
+    padding: 8px 15px;
+    font-size: 1em;
+    cursor: pointer;
+    border: 1px solid #0073aa;
+    background-color: #0073aa;
+    color: white;
+    border-radius: 4px;
+}
+
+.eve-materials-container button:hover {
+    background-color: #005177;
+    border-color: #005177;
+}
+
+.eve-materials-result {
+    margin-top: 15px;
     line-height: 1.5;
 }
 
+.indented-material {
+    line-height: 1.5;
+    padding-left: 10px;
+    border-left: 2px solid #ddd;
+}
+
+/* Indentation levels */
 .depth-1 {
     margin-left: 20px;
 }
@@ -19,4 +52,13 @@
 }
 .depth-3 {
     margin-left: 60px;
+}
+.depth-4 {
+    margin-left: 80px;
+}
+.depth-5 {
+    margin-left: 100px;
+}
+.has-children {
+    font-weight: bold;
 }
