@@ -2,7 +2,7 @@
 /*
 Plugin Name: EVE Production Calculator
 Description: Adds a shortcode [eve_production_calculator] which allows users to see the build requirements for any blueprint in EVE Online.
-Version: 0.3.6
+Version: 0.3.7
 Author: C4813
 */
 
@@ -71,7 +71,7 @@ function eve_production_calculator_shortcode() {
 
         async function lookupMaterials() {
             await initializeData();
-
+        
             const nameInput = document.getElementById('eve-item-name').value.trim();
             const output = document.getElementById('eve-materials-output');
             const resolveBtnDiv = document.getElementById('resolve-layers-button');
@@ -80,7 +80,7 @@ function eve_production_calculator_shortcode() {
             const copyAllBtn = document.getElementById('copy-all-btn');
             const copyParentBtn = document.getElementById('copy-parent-btn');
             const copyLeafBtn = document.getElementById('copy-leaf-btn');
-
+        
             resolveBtnDiv.style.display = 'none';
             recursiveOutput.innerHTML = '';
             output.innerHTML = '';
@@ -88,30 +88,39 @@ function eve_production_calculator_shortcode() {
             copyAllBtn.style.display = 'none';
             copyParentBtn.style.display = 'none';
             copyLeafBtn.style.display = 'none';
-
+        
             if (!nameInput) {
                 output.textContent = 'Please enter an item name.';
                 return;
             }
-
-            const lowerName = nameInput.toLowerCase();
-            const matchKey = Object.keys(nameToID).find(k => k.toLowerCase() === lowerName);
-            const typeID = matchKey ? parseInt(nameToID[matchKey]) : null;
-
-            if (!typeID) {
-                output.textContent = 'Item not found.';
-                return;
+        
+            const lowerInput = nameInput.toLowerCase();
+        
+            // Try to match original input
+            let matchKey = Object.keys(nameToID).find(k => k.toLowerCase() === lowerInput);
+            let typeID = matchKey ? parseInt(nameToID[matchKey]) : null;
+        
+            // If not found or has no manufacturing data, try appending ' Blueprint'
+            let materials = materialMap[typeID]?.filter(m => m.activityID === 1) || [];
+            if ((!matchKey || materials.length === 0) && !lowerInput.endsWith('blueprint')) {
+                const blueprintName = nameInput + " Blueprint";
+                const blueprintKey = Object.keys(nameToID).find(k => k.toLowerCase() === blueprintName.toLowerCase());
+                if (blueprintKey) {
+                    matchKey = blueprintKey;
+                    typeID = parseInt(nameToID[blueprintKey]);
+                    materials = materialMap[typeID]?.filter(m => m.activityID === 1) || [];
+                }
             }
-
-            const materials = materialMap[typeID]?.filter(m => m.activityID === 1) || [];
-            currentMaterials = materials.map(m => ({ ...m }));
-            currentRootName = matchKey;
-
-            if (materials.length === 0) {
+        
+            if (!matchKey || materials.length === 0) {
                 output.textContent = 'No manufacturing materials found.';
                 return;
             }
-
+        
+            currentMaterials = materials.map(m => ({ ...m }));
+            currentRootTypeID = typeID;
+            currentRootName = matchKey;
+        
             const hasExtraLayers = materials.some(mat => {
                 let nested = materialMap[mat.materialTypeID];
                 if (nested && nested.some(nm => nm.activityID === 1 && nm.quantity > 0)) return true;
@@ -123,14 +132,14 @@ function eve_production_calculator_shortcode() {
                 nested = materialMap[blueprintID];
                 return nested && nested.some(nm => nm.activityID === 1 && nm.quantity > 0);
             });
-
+        
             let html = `<h4>Materials for ${matchKey}</h4>`;
             for (const mat of materials) {
                 const matName = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
                 html += `<div class="top-material">${matName} x${mat.quantity.toLocaleString()}</div>`;
             }
             output.innerHTML = html;
-
+        
             if (hasExtraLayers) {
                 resolveBtnDiv.style.display = 'block';
             } else {
