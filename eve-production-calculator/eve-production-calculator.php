@@ -2,7 +2,7 @@
 /*
 Plugin Name: EVE Production Calculator
 Description: Adds a shortcode [eve_production_calculator] which allows users to see the build requirements for any blueprint in EVE Online.
-Version: 0.3.10
+Version: 0.3.11
 Author: C4813
 */
 
@@ -19,8 +19,103 @@ function eve_production_calculator_shortcode() {
 
     ob_start(); ?>
     <div class="eve-materials-container">
+        <div class="production-settings-grid" style="margin-bottom: 15px;">
+          <div class="production-column">
+            <h4>Hull Production</h4>
+            <label>Structure
+              <select id="hull-structure">
+                <option>Raitaru</option>
+                <option>Azbel</option>
+                <option>Sotiyo</option>
+              </select>
+            </label>
+            <label>ME Rig
+              <select id="hull-me-rig">
+                <option>None</option>
+                <option>T1</option>
+                <option>T2</option>
+                <option>Thukker</option>
+              </select>
+            </label>
+            <label>TE Rig
+              <select id="hull-te-rig">
+                <option>None</option>
+                <option>T1</option>
+                <option>T2</option>
+                <option>Thukker</option>
+              </select>
+            </label>
+            <label>System Security
+              <select id="hull-sec">
+                <option>HighSec</option>
+                <option>LowSec</option>
+                <option>NullSec/JSpace</option>
+              </select>
+            </label>
+            <label>Implant
+              <select id="hull-implant">
+                <option>None</option>
+                <option>BX-801</option>
+                <option>BX-802</option>
+                <option>BX-804</option>
+              </select>
+            </label>
+            <label>Tax (%)
+              <input type="number" id="hull-other-mod" min="0" max="100" value="0" />
+            </label>
+          </div>
+        
+          <div class="production-divider"></div>
+        
+          <div class="production-column">
+            <h4>Component Production</h4>
+            <label>Structure
+              <select id="comp-structure">
+                <option>Raitaru</option>
+                <option>Azbel</option>
+                <option>Sotiyo</option>
+              </select>
+            </label>
+            <label>ME Rig
+              <select id="comp-me-rig">
+                <option>None</option>
+                <option>T1</option>
+                <option>T2</option>
+                <option>Thukker</option>
+              </select>
+            </label>
+            <label>TE Rig
+              <select id="comp-te-rig">
+                <option>None</option>
+                <option>T1</option>
+                <option>T2</option>
+                <option>Thukker</option>
+              </select>
+            </label>
+            <label>System Security
+              <select id="comp-sec">
+                <option>HighSec</option>
+                <option>LowSec</option>
+                <option>NullSec/JSpace</option>
+              </select>
+            </label>
+            <label>Implant
+              <select id="comp-implant">
+                <option>None</option>
+                <option>BX-801</option>
+                <option>BX-802</option>
+                <option>BX-804</option>
+              </select>
+            </label>
+            <label>Tax (%)
+              <input type="number" id="comp-other-mod" min="0" max="100" value="0" />
+            </label>
+          </div>
+        </div>
+
         <input type="text" id="eve-item-name" placeholder="Enter item name" />
         <button id="calculate-btn">Calculate</button>
+
         <div id="eve-materials-output" class="eve-materials-result"></div>
         <div id="resolve-layers-button" style="display:none; margin-top: 10px;">
             <button id="resolve-btn">Resolve All Layers</button>
@@ -35,6 +130,9 @@ function eve_production_calculator_shortcode() {
 
     <script>
     (function(){
+        // Your previous JS logic here (unchanged)
+        // You can add the new inputs' values into calculation if needed later
+        // For now this just re-adds the input elements visually
         const materialsUrl = '<?php echo $materials_url; ?>';
         const nameidUrl = '<?php echo $nameid_url; ?>';
 
@@ -168,7 +266,6 @@ function eve_production_calculator_shortcode() {
         
                 const name = typeIDToName[matID] || `Type ID: ${matID}`;
         
-                // Check if this material has children
                 let children = materialMap[matID];
                 if ((!children || children.length === 0) && nameToID[name + " Blueprint"]) {
                     const blueprintID = nameToID[name + " Blueprint"];
@@ -201,7 +298,6 @@ function eve_production_calculator_shortcode() {
 
                 let componentHTML = await getIndentedMaterialsHTML(mat.materialTypeID, qty);
 
-                // Fallback to render unresolvable top-level materials
                 if (!componentHTML) {
                     componentHTML = `<div class="indented-material depth-1" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()}</div>`;
                 }
@@ -223,18 +319,14 @@ function eve_production_calculator_shortcode() {
             const container = document.getElementById('eve-materials-recursive-output');
             const allMap = new Map();
 
-            // Get all component blocks (top-level containers)
             const componentBlocks = container.querySelectorAll('.component-block');
 
-            // Set to hold parent names (elements that have children)
             const parents = new Set();
 
-            // Add all .indented-material.has-child to parents set
             container.querySelectorAll('.indented-material.has-child').forEach(el => {
                 parents.add(el.dataset.name);
             });
 
-            // Check each component-block's top-material and if it has any .indented-material children, mark top-material as parent
             componentBlocks.forEach(block => {
                 const topMaterial = block.querySelector('.top-material');
                 const indentedChildren = block.querySelectorAll('.indented-material');
@@ -243,13 +335,11 @@ function eve_production_calculator_shortcode() {
                 }
             });
 
-            // Now collect all materials inside the container
             const elements = container.querySelectorAll('.indented-material, .top-material');
 
             if (type === 'leaf') {
                 const leafMap = new Map();
 
-                // Add only leaf elements from resolved output (exclude parents)
                 elements.forEach(el => {
                     const name = el.dataset.name;
                     const qty = parseInt(el.dataset.qty, 10);
