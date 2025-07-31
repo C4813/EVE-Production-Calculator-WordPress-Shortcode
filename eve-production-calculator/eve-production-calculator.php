@@ -2,7 +2,7 @@
 /*
 Plugin Name: EVE Production Calculator
 Description: Adds a shortcode [eve_production_calculator] which allows users to see the build requirements for any blueprint in EVE Online.
-Version: 0.3.7
+Version: 0.3.8
 Author: C4813
 */
 
@@ -19,18 +19,113 @@ function eve_production_calculator_shortcode() {
 
     ob_start(); ?>
     <div class="eve-materials-container">
-        <input type="text" id="eve-item-name" placeholder="Enter item name" />
-        <button id="calculate-btn">Calculate</button>
-        <div id="eve-materials-output" class="eve-materials-result"></div>
-        <div id="resolve-layers-button" style="display:none; margin-top: 10px;">
-            <button id="resolve-btn">Resolve All Layers</button>
+
+      <div class="production-settings-grid">
+        <div class="production-column">
+          <h4>Hull Production</h4>
+          <label>Structure
+            <select id="hull-structure">
+              <option>Raitaru</option>
+              <option>Azbel</option>
+              <option>Sotiyo</option>
+            </select>
+          </label>
+          <label>ME Rig
+            <select id="hull-me-rig">
+              <option>None</option>
+              <option>T1</option>
+              <option>T2</option>
+              <option>Thukker</option>
+            </select>
+          </label>
+          <label>TE Rig
+            <select id="hull-te-rig">
+              <option>None</option>
+              <option>T1</option>
+              <option>T2</option>
+              <option>Thukker</option>
+            </select>
+          </label>
+          <label>System Security
+            <select id="hull-sec">
+              <option>HighSec</option>
+              <option>LowSec</option>
+              <option>NullSec/JSpace</option>
+            </select>
+          </label>
+          <label>Implant
+            <select id="hull-implant">
+              <option>None</option>
+              <option>BX-801</option>
+              <option>BX-802</option>
+              <option>BX-804</option>
+            </select>
+          </label>
+          <label>Tax (%):
+            <input type="number" id="hull-other-mod" min="0" max="100" value="0" />
+          </label>
         </div>
-        <div id="copy-button-container" style="display:none; margin-top:10px;">
-            <button id="copy-all-btn" style="display:none;">Copy All</button>
-            <button id="copy-parent-btn" style="display:none; margin-right:10px;">Copy Parent Layers</button>
-            <button id="copy-leaf-btn" style="display:none;">Copy Leaf Layers</button>
+
+        <div></div> <!-- vertical divider -->
+
+        <div class="production-column">
+          <h4>Component Production</h4>
+          <label>Structure
+            <select id="comp-structure">
+              <option>Raitaru</option>
+              <option>Azbel</option>
+              <option>Sotiyo</option>
+            </select>
+          </label>
+          <label>ME Rig
+            <select id="comp-me-rig">
+              <option>None</option>
+              <option>T1</option>
+              <option>T2</option>
+              <option>Thukker</option>
+            </select>
+          </label>
+          <label>TE Rig
+            <select id="comp-te-rig">
+              <option>None</option>
+              <option>T1</option>
+              <option>T2</option>
+              <option>Thukker</option>
+            </select>
+          </label>
+          <label>System Security
+            <select id="comp-sec">
+              <option>HighSec</option>
+              <option>LowSec</option>
+              <option>NullSec/JSpace</option>
+            </select>
+          </label>
+          <label>Implant
+            <select id="comp-implant">
+              <option>None</option>
+              <option>BX-801</option>
+              <option>BX-802</option>
+              <option>BX-804</option>
+            </select>
+          </label>
+          <label>Tax (%):
+            <input type="number" id="comp-other-mod" min="0" max="100" value="0" />
+          </label>
         </div>
-        <div id="eve-materials-recursive-output" class="eve-materials-result"></div>
+      </div>
+
+      <input type="text" id="eve-item-name" placeholder="Enter item name" />
+      <button id="calculate-btn">Calculate</button>
+      <div id="eve-materials-output" class="eve-materials-result"></div>
+      <div id="resolve-layers-button" style="display:none; margin-top: 10px;">
+          <button id="resolve-btn">Resolve All Layers</button>
+      </div>
+      <div id="copy-button-container" style="display:none; margin-top:10px;">
+          <button id="copy-all-btn" style="display:none;">Copy All</button>
+          <button id="copy-parent-btn" style="display:none; margin-right:10px;">Copy Parent Layers</button>
+          <button id="copy-leaf-btn" style="display:none;">Copy Leaf Layers</button>
+      </div>
+      <div id="eve-materials-recursive-output" class="eve-materials-result"></div>
     </div>
 
     <script>
@@ -44,6 +139,7 @@ function eve_production_calculator_shortcode() {
         let materialMap = {};
 
         let currentMaterials = [];
+        let currentRootTypeID = null;
         let currentRootName = null;
 
         async function loadJSON(url) {
@@ -71,7 +167,7 @@ function eve_production_calculator_shortcode() {
 
         async function lookupMaterials() {
             await initializeData();
-        
+
             const nameInput = document.getElementById('eve-item-name').value.trim();
             const output = document.getElementById('eve-materials-output');
             const resolveBtnDiv = document.getElementById('resolve-layers-button');
@@ -80,7 +176,7 @@ function eve_production_calculator_shortcode() {
             const copyAllBtn = document.getElementById('copy-all-btn');
             const copyParentBtn = document.getElementById('copy-parent-btn');
             const copyLeafBtn = document.getElementById('copy-leaf-btn');
-        
+
             resolveBtnDiv.style.display = 'none';
             recursiveOutput.innerHTML = '';
             output.innerHTML = '';
@@ -88,19 +184,19 @@ function eve_production_calculator_shortcode() {
             copyAllBtn.style.display = 'none';
             copyParentBtn.style.display = 'none';
             copyLeafBtn.style.display = 'none';
-        
+
             if (!nameInput) {
                 output.textContent = 'Please enter an item name.';
                 return;
             }
-        
+
             const lowerInput = nameInput.toLowerCase();
-        
-            // Try to match original input
+
+            // Try exact match
             let matchKey = Object.keys(nameToID).find(k => k.toLowerCase() === lowerInput);
             let typeID = matchKey ? parseInt(nameToID[matchKey]) : null;
-        
-            // If not found or has no manufacturing data, try appending ' Blueprint'
+
+            // If no exact match or no materials, try appending ' Blueprint'
             let materials = materialMap[typeID]?.filter(m => m.activityID === 1) || [];
             if ((!matchKey || materials.length === 0) && !lowerInput.endsWith('blueprint')) {
                 const blueprintName = nameInput + " Blueprint";
@@ -111,16 +207,16 @@ function eve_production_calculator_shortcode() {
                     materials = materialMap[typeID]?.filter(m => m.activityID === 1) || [];
                 }
             }
-        
+
             if (!matchKey || materials.length === 0) {
                 output.textContent = 'No manufacturing materials found.';
                 return;
             }
-        
+
             currentMaterials = materials.map(m => ({ ...m }));
             currentRootTypeID = typeID;
             currentRootName = matchKey;
-        
+
             const hasExtraLayers = materials.some(mat => {
                 let nested = materialMap[mat.materialTypeID];
                 if (nested && nested.some(nm => nm.activityID === 1 && nm.quantity > 0)) return true;
@@ -132,14 +228,14 @@ function eve_production_calculator_shortcode() {
                 nested = materialMap[blueprintID];
                 return nested && nested.some(nm => nm.activityID === 1 && nm.quantity > 0);
             });
-        
+
             let html = `<h4>Materials for ${matchKey}</h4>`;
             for (const mat of materials) {
                 const matName = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
                 html += `<div class="top-material">${matName} x${mat.quantity.toLocaleString()}</div>`;
             }
             output.innerHTML = html;
-        
+
             if (hasExtraLayers) {
                 resolveBtnDiv.style.display = 'block';
             } else {
@@ -157,57 +253,49 @@ function eve_production_calculator_shortcode() {
                     materials = materialMap[blueprintID]?.filter(m => m.activityID === 1);
                 }
             }
-        
+
             if (!materials || materials.length === 0) return '';
-        
+
             let html = '';
             for (const mat of materials) {
                 const matID = mat.materialTypeID;
                 const qty = mat.quantity * multiplier;
                 if (!qty || qty <= 0) continue;
-        
+
                 const name = typeIDToName[matID] || `Type ID: ${matID}`;
-        
+
                 // Check if this material has children
                 let children = materialMap[matID];
                 if ((!children || children.length === 0) && nameToID[name + " Blueprint"]) {
                     const blueprintID = nameToID[name + " Blueprint"];
                     children = materialMap[blueprintID];
                 }
-        
+
                 let classes = `indented-material depth-${depth}`;
                 if (Array.isArray(children) && children.some(m => m.activityID === 1)) {
                     classes += ' has-child';
                 } else {
                     classes += ' is-child';
                 }
-        
+
                 html += `<div class="${classes}" data-name="${name}" data-qty="${qty}">${name} x${qty.toLocaleString()}</div>`;
                 html += await getIndentedMaterialsHTML(matID, qty, depth + 1);
             }
-        
+
             return html;
         }
 
         async function resolveAllLayers() {
-            await initializeData();
-
             const recursiveOutput = document.getElementById('eve-materials-recursive-output');
             recursiveOutput.innerHTML = `<h4>Resolved Materials for ${currentRootName}</h4>`;
 
-            for (const mat of currentMaterials) {
+            for (let i = 0; i < currentMaterials.length; i++) {
+                const mat = currentMaterials[i];
                 const matName = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
                 const qty = mat.quantity;
 
-                let componentHTML = await getIndentedMaterialsHTML(mat.materialTypeID, qty);
-
-                // ✅ Fallback: ensure even unresolvable top-level materials are rendered
-                if (!componentHTML) {
-                    componentHTML = `<div class="indented-material depth-1" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()}</div>`;
-                }
-
                 let html = `<div class="component-block"><strong>${matName} x${qty.toLocaleString()}</strong>`;
-                html += componentHTML;
+                html += await getIndentedMaterialsHTML(mat.materialTypeID, qty);
                 html += '</div>';
 
                 recursiveOutput.innerHTML += html;
@@ -220,62 +308,26 @@ function eve_production_calculator_shortcode() {
         }
 
         function copyResolvedLayers(type) {
-            const all = Array.from(document.querySelectorAll('.indented-material'));
-            const noResolvedLayers = all.length === 0;
-
-            if ((type === 'parent' || type === 'all') && (noResolvedLayers || type === 'parent')) {
-                if (!currentMaterials || currentMaterials.length === 0) return;
-
-                const output = currentMaterials
-                    .map(mat => {
-                        const name = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
-                        return `${name} x${mat.quantity.toLocaleString()}`;
-                    })
-                    .join('\n');
-
-                navigator.clipboard.writeText(output);
-                return;
-            }
-
-            if (type === 'leaf') {
-                const leafMap = new Map();
-
-                for (let i = 0; i < all.length; i++) {
-                    const current = all[i];
-                    const next = all[i + 1];
-
-                    const currentDepthMatch = current.className.match(/depth-(\d+)/);
-                    const nextDepthMatch = next?.className.match(/depth-(\d+)/);
-
-                    const currentDepth = currentDepthMatch ? parseInt(currentDepthMatch[1]) : 0;
-                    const nextDepth = nextDepthMatch ? parseInt(nextDepthMatch[1]) : -1;
-
-                    if (!next || nextDepth <= currentDepth) {
-                        const name = current.dataset.name;
-                        const qty = parseInt(current.dataset.qty);
-
-                        if (!name || isNaN(qty)) continue;
-
-                        if (!leafMap.has(name)) leafMap.set(name, 0);
-                        leafMap.set(name, leafMap.get(name) + qty);
-                    }
-                }
-
-                const output = Array.from(leafMap.entries())
-                    .map(([name, qty]) => `${name} x${qty.toLocaleString()}`)
-                    .join('\n');
-
-                if (output) navigator.clipboard.writeText(output);
-                return;
-            }
-
+            const all = document.querySelectorAll('.indented-material, .top-material');
             const map = new Map();
+
             all.forEach(el => {
                 const name = el.dataset.name;
                 const qty = parseInt(el.dataset.qty);
-                if (!name || isNaN(qty)) return;
-                if (!map.has(name)) map.set(name, 0);
-                map.set(name, map.get(name) + qty);
+                const isParent = el.classList.contains('has-child');
+                const isLeaf = el.classList.contains('is-child');
+
+                const shouldCopy =
+                    (type === 'all') ||
+                    (type === 'parent' && isParent) ||
+                    (type === 'leaf' && isLeaf);
+
+                if (shouldCopy) {
+                    if (!map.has(name)) {
+                        map.set(name, 0);
+                    }
+                    map.set(name, map.get(name) + qty);
+                }
             });
 
             const output = Array.from(map.entries())
