@@ -1,10 +1,7 @@
-.component-block {
-    border: 1px solid #ccc;
-    padding: 12px 15px;
-    margin: 20px 0;
-    background-color: #fefefe;
-    border-radius: 8px;
-    box-shadow: 1px 1px 5px rgba(0,0,0,0.1);
+.eve-materials-container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 20px;
 }
 
 .eve-materials-container input[type="text"] {
@@ -37,13 +34,20 @@
     line-height: 1.5;
 }
 
-.indented-material {
-    line-height: 1.5;
-    padding-left: 10px;
-    border-left: 2px solid #ddd;
+.component-block {
+    border: 1px solid #ccc;
+    padding: 12px 15px;
+    margin: 20px 0;
+    background-color: #fefefe;
+    border-radius: 8px;
+    box-shadow: 1px 1px 5px rgba(0,0,0,0.1);
 }
 
-/* Indentation levels */
+.indented-material {
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
 .depth-1 {
     margin-left: 20px;
 }
@@ -59,6 +63,20 @@
 .depth-5 {
     margin-left: 100px;
 }
-.has-children {
+.depth-6 {
+    margin-left: 120px;
+}
+.depth-7 {
+    margin-left: 140px;
+}
+
+.indented-material.has-child {
     font-weight: bold;
+}
+
+button#copy-all-btn,
+button#copy-parent-btn,
+button#copy-leaf-btn {
+    margin-top: 10px;
+    margin-right: 10px;
 }
