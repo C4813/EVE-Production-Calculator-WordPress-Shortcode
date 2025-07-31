@@ -2,7 +2,7 @@
 /*
 Plugin Name: EVE Production Calculator
 Description: Adds a shortcode [eve_production_calculator] which allows users to see the build requirements for any blueprint in EVE Online.
-Version: 0.3.4
+Version: 0.3.6
 Author: C4813
 */
 
@@ -44,7 +44,6 @@ function eve_production_calculator_shortcode() {
         let materialMap = {};
 
         let currentMaterials = [];
-        let currentRootTypeID = null;
         let currentRootName = null;
 
         async function loadJSON(url) {
@@ -106,7 +105,6 @@ function eve_production_calculator_shortcode() {
 
             const materials = materialMap[typeID]?.filter(m => m.activityID === 1) || [];
             currentMaterials = materials.map(m => ({ ...m }));
-            currentRootTypeID = typeID;
             currentRootName = matchKey;
 
             if (materials.length === 0) {
@@ -161,16 +159,15 @@ function eve_production_calculator_shortcode() {
         
                 const name = typeIDToName[matID] || `Type ID: ${matID}`;
         
+                // Check if this material has children
                 let children = materialMap[matID];
                 if ((!children || children.length === 0) && nameToID[name + " Blueprint"]) {
                     const blueprintID = nameToID[name + " Blueprint"];
                     children = materialMap[blueprintID];
                 }
         
-                const isParent = children && children.some(m => m.activityID === 1);
-        
                 let classes = `indented-material depth-${depth}`;
-                if (isParent) {
+                if (Array.isArray(children) && children.some(m => m.activityID === 1)) {
                     classes += ' has-child';
                 } else {
                     classes += ' is-child';
@@ -179,21 +176,29 @@ function eve_production_calculator_shortcode() {
                 html += `<div class="${classes}" data-name="${name}" data-qty="${qty}">${name} x${qty.toLocaleString()}</div>`;
                 html += await getIndentedMaterialsHTML(matID, qty, depth + 1);
             }
+        
             return html;
         }
 
         async function resolveAllLayers() {
             await initializeData();
+
             const recursiveOutput = document.getElementById('eve-materials-recursive-output');
             recursiveOutput.innerHTML = `<h4>Resolved Materials for ${currentRootName}</h4>`;
 
-            for (let i = 0; i < currentMaterials.length; i++) {
-                const mat = currentMaterials[i];
+            for (const mat of currentMaterials) {
                 const matName = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
                 const qty = mat.quantity;
 
+                let componentHTML = await getIndentedMaterialsHTML(mat.materialTypeID, qty);
+
+                // ✅ Fallback: ensure even unresolvable top-level materials are rendered
+                if (!componentHTML) {
+                    componentHTML = `<div class="indented-material depth-1" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()}</div>`;
+                }
+
                 let html = `<div class="component-block"><strong>${matName} x${qty.toLocaleString()}</strong>`;
-                html += await getIndentedMaterialsHTML(mat.materialTypeID, qty);
+                html += componentHTML;
                 html += '</div>';
 
                 recursiveOutput.innerHTML += html;
@@ -206,47 +211,68 @@ function eve_production_calculator_shortcode() {
         }
 
         function copyResolvedLayers(type) {
-            const all = document.querySelectorAll('.indented-material');
-        
-            // Fallback for when no resolved layers exist
+            const all = Array.from(document.querySelectorAll('.indented-material'));
             const noResolvedLayers = all.length === 0;
-        
+
             if ((type === 'parent' || type === 'all') && (noResolvedLayers || type === 'parent')) {
                 if (!currentMaterials || currentMaterials.length === 0) return;
-        
+
                 const output = currentMaterials
                     .map(mat => {
                         const name = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
                         return `${name} x${mat.quantity.toLocaleString()}`;
                     })
                     .join('\n');
-        
+
                 navigator.clipboard.writeText(output);
                 return;
             }
-        
-            // Otherwise: copy from resolved indented DOM elements
+
+            if (type === 'leaf') {
+                const leafMap = new Map();
+
+                for (let i = 0; i < all.length; i++) {
+                    const current = all[i];
+                    const next = all[i + 1];
+
+                    const currentDepthMatch = current.className.match(/depth-(\d+)/);
+                    const nextDepthMatch = next?.className.match(/depth-(\d+)/);
+
+                    const currentDepth = currentDepthMatch ? parseInt(currentDepthMatch[1]) : 0;
+                    const nextDepth = nextDepthMatch ? parseInt(nextDepthMatch[1]) : -1;
+
+                    if (!next || nextDepth <= currentDepth) {
+                        const name = current.dataset.name;
+                        const qty = parseInt(current.dataset.qty);
+
+                        if (!name || isNaN(qty)) continue;
+
+                        if (!leafMap.has(name)) leafMap.set(name, 0);
+                        leafMap.set(name, leafMap.get(name) + qty);
+                    }
+                }
+
+                const output = Array.from(leafMap.entries())
+                    .map(([name, qty]) => `${name} x${qty.toLocaleString()}`)
+                    .join('\n');
+
+                if (output) navigator.clipboard.writeText(output);
+                return;
+            }
+
             const map = new Map();
-        
             all.forEach(el => {
                 const name = el.dataset.name;
                 const qty = parseInt(el.dataset.qty);
-                const isLeaf = el.classList.contains('is-child');
-        
-                const shouldCopy =
-                    (type === 'all') ||
-                    (type === 'leaf' && isLeaf);
-        
-                if (shouldCopy) {
-                    if (!map.has(name)) map.set(name, 0);
-                    map.set(name, map.get(name) + qty);
-                }
+                if (!name || isNaN(qty)) return;
+                if (!map.has(name)) map.set(name, 0);
+                map.set(name, map.get(name) + qty);
             });
-        
+
             const output = Array.from(map.entries())
                 .map(([name, qty]) => `${name} x${qty.toLocaleString()}`)
                 .join('\n');
-        
+
             navigator.clipboard.writeText(output);
         }
 
