@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
       typeIDToName = {};
       typeIDToMarketGroup = {};
       for (const [name, data] of Object.entries(nameToID)) {
-        // Handle new format where data is object { typeID, marketGroupID }
         if (typeof data === 'object' && data.typeID && data.marketGroupID) {
           typeIDToName[data.typeID] = name;
           typeIDToMarketGroup[data.typeID] = data.marketGroupID.toString();
@@ -48,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Traverse marketGroups parents until 'None', return true if ultimate parent is '4' (Ships)
   function isShip(marketGroupID) {
     let currentID = marketGroupID?.toString();
     if (!currentID || !(currentID in marketGroups)) return false;
@@ -57,9 +55,77 @@ document.addEventListener('DOMContentLoaded', () => {
     while (currentID !== "None") {
       prevID = currentID;
       currentID = marketGroups[currentID]?.parentGroupID;
-      if (currentID === undefined) break; // safety break
+      if (currentID === undefined) break;
     }
     return prevID === "4";
+  }
+
+  function getChildrenForMaterial(matID, name) {
+    const fallbackName = typeIDToName[matID];
+    const searchName = name && name !== `Type ID: ${matID}` ? name : fallbackName;
+    if (!searchName) return null;
+
+    let children = materialMap[matID]?.filter(m => m.activityID === 1 && m.quantity > 0);
+    if (Array.isArray(children) && children.length > 0) {
+      return children;
+    }
+
+    const blueprintName = searchName + " Blueprint";
+    const blueprintEntry = nameToID[blueprintName];
+    const blueprintID = blueprintEntry
+      ? (typeof blueprintEntry === 'object' ? blueprintEntry.typeID : parseInt(blueprintEntry))
+      : null;
+
+    if (!blueprintID) return null;
+
+    const blueprintChildren = materialMap[blueprintID]?.filter(m => m.activityID === 1 && m.quantity > 0);
+    if (!Array.isArray(blueprintChildren) || blueprintChildren.length === 0) {
+      return null;
+    }
+
+    return blueprintChildren;
+  }
+
+  async function getIndentedMaterialsHTMLUnique(typeID, multiplier, depth = 1, seen) {
+    const alreadySeen = seen.has(typeID);
+    seen.set(typeID, true);
+
+    let materials = materialMap[typeID]?.filter(m => m.activityID === 1);
+    if ((!materials || materials.length === 0) && typeIDToName[typeID]) {
+      const blueprintName = typeIDToName[typeID] + " Blueprint";
+      const blueprintID = nameToID[blueprintName]
+        ? (typeof nameToID[blueprintName] === "object"
+            ? nameToID[blueprintName].typeID
+            : parseInt(nameToID[blueprintName]))
+        : null;
+      if (blueprintID) {
+        materials = materialMap[blueprintID]?.filter(m => m.activityID === 1);
+      }
+    }
+
+    if (!materials || materials.length === 0) return "";
+
+    let html = "";
+    for (const mat of materials) {
+      const matID = mat.materialTypeID;
+      const qty = mat.quantity * multiplier;
+      if (!qty || qty <= 0) continue;
+
+      const name = typeIDToName[matID] || `Type ID: ${matID}`;
+      const children = getChildrenForMaterial(matID, name);
+      const hasChildren = !!children;
+
+      let classes = `indented-material depth-${depth}`;
+      classes += hasChildren ? " has-child" : " is-child";
+
+      html += `<div class="${classes}" data-name="${name}" data-qty="${qty}">${name} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[matID]) ? "YES" : "NO"}</div>`;
+
+      if (hasChildren && !alreadySeen) {
+        html += await getIndentedMaterialsHTMLUnique(matID, qty, depth + 1, seen);
+      }
+    }
+
+    return html;
   }
 
   async function lookupMaterials() {
@@ -88,12 +154,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const lowerInput = nameInput.toLowerCase();
-
-    // Try to match original input
     let matchKey = Object.keys(nameToID).find(k => k.toLowerCase() === lowerInput);
     let typeID = matchKey ? (typeof nameToID[matchKey] === 'object' ? nameToID[matchKey].typeID : parseInt(nameToID[matchKey])) : null;
 
-    // If not found or no manufacturing data, try appending ' Blueprint'
     let materials = materialMap[typeID]?.filter(m => m.activityID === 1) || [];
     if ((!matchKey || materials.length === 0) && !lowerInput.endsWith('blueprint')) {
       const blueprintName = nameInput + " Blueprint";
@@ -115,21 +178,15 @@ document.addEventListener('DOMContentLoaded', () => {
     currentRootName = matchKey;
 
     const hasExtraLayers = materials.some(mat => {
-      let nested = materialMap[mat.materialTypeID];
-      if (nested && nested.some(nm => nm.activityID === 1 && nm.quantity > 0)) return true;
       const matName = typeIDToName[mat.materialTypeID];
-      if (!matName) return false;
-      const blueprintName = matName + " Blueprint";
-      const blueprintID = nameToID[blueprintName] ? (typeof nameToID[blueprintName] === 'object' ? nameToID[blueprintName].typeID : parseInt(nameToID[blueprintName])) : null;
-      if (!blueprintID) return false;
-      nested = materialMap[blueprintID];
-      return nested && nested.some(nm => nm.activityID === 1 && nm.quantity > 0);
+      const children = getChildrenForMaterial(mat.materialTypeID, matName);
+      return !!children;
     });
 
     let html = `<h4>Materials for ${matchKey}</h4>`;
     for (const mat of materials) {
       const matName = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
-      html += `<div class="top-material">${matName} x${mat.quantity.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</div>`;
+      html += `<div class="top-material" data-name="${matName}" data-qty="${mat.quantity}">${matName} x${mat.quantity.toLocaleString()}</div>`;
     }
     output.innerHTML = html;
 
@@ -141,80 +198,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-    async function getIndentedMaterialsHTML(typeID, multiplier, depth = 1) {
-      function getChildrenForMaterial(matID, name) {
-        let children = materialMap[matID];
-        if (!children || children.length === 0) {
-          const blueprintName = name + " Blueprint";
-          const blueprintID = nameToID[blueprintName]
-            ? (typeof nameToID[blueprintName] === "object"
-                ? nameToID[blueprintName].typeID
-                : parseInt(nameToID[blueprintName]))
-            : null;
-          if (blueprintID) {
-            children = materialMap[blueprintID];
-          }
-        }
-        return children;
-      }
-    
-      let materials = materialMap[typeID]?.filter(m => m.activityID === 1);
-      if ((!materials || materials.length === 0) && typeIDToName[typeID]) {
-        const blueprintName = typeIDToName[typeID] + " Blueprint";
-        const blueprintID = nameToID[blueprintName]
-          ? (typeof nameToID[blueprintName] === "object"
-              ? nameToID[blueprintName].typeID
-              : parseInt(nameToID[blueprintName]))
-          : null;
-        if (blueprintID) {
-          materials = materialMap[blueprintID]?.filter(m => m.activityID === 1);
-        }
-      }
-    
-      if (!materials || materials.length === 0) return "";
-    
-      let html = "";
-      for (const mat of materials) {
-        const matID = mat.materialTypeID;
-        const qty = mat.quantity * multiplier;
-        if (!qty || qty <= 0) continue;
-    
-        const name = typeIDToName[matID] || `Type ID: ${matID}`;
-    
-        const children = getChildrenForMaterial(matID, name);
-    
-        let classes = `indented-material depth-${depth}`;
-        if (Array.isArray(children) && children.some(m => m.activityID === 1)) {
-          classes += " has-child";
-        } else {
-          classes += " is-child";
-        }
-    
-        html += `<div class="${classes}" data-name="${name}" data-qty="${qty}">${name} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[matID]) ? "YES" : "NO"}</div>`;
-        html += await getIndentedMaterialsHTML(matID, qty, depth + 1);
-      }
-    
-      return html;
-    }
-
   async function resolveAllLayers() {
     await initializeData();
-
     const recursiveOutput = document.getElementById('eve-materials-recursive-output');
     recursiveOutput.innerHTML = `<h4>Resolved Materials for ${currentRootName}</h4>`;
 
+    const seen = new Map();
     for (const mat of currentMaterials) {
       const matName = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
       const qty = mat.quantity;
+      const children = getChildrenForMaterial(mat.materialTypeID, matName);
+      const hasChildren = !!children;
 
-      let componentHTML = await getIndentedMaterialsHTML(mat.materialTypeID, qty);
+      const topClass = `indented-material depth-1 ${hasChildren ? 'has-child' : 'is-child'}`;
 
-      // Fallback: ensure even unresolvable top-level materials are rendered
-      if (!componentHTML) {
-        componentHTML = `<div class="indented-material depth-1" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</div>`;
-      }
+      const componentHTML = await getIndentedMaterialsHTMLUnique(mat.materialTypeID, qty, 1, seen);
 
-      let html = `<div class="component-block"><strong class="top-material" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</strong>`;
+      let html = `<div class="component-block">`;
+      html += `<div class="${topClass}" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</div>`;
       html += componentHTML;
       html += '</div>';
 
@@ -230,49 +231,39 @@ document.addEventListener('DOMContentLoaded', () => {
   function copyResolvedLayers(type) {
     const container = document.getElementById('eve-materials-recursive-output');
     const allMap = new Map();
+    const initialMap = new Map();
 
-    // Get all component blocks (top-level containers)
-    const componentBlocks = container.querySelectorAll('.component-block');
-
-    // Set to hold parent names (elements that have children)
-    const parents = new Set();
-
-    // Add all .indented-material.has-child to parents set
-    container.querySelectorAll('.indented-material.has-child').forEach(el => {
-      parents.add(el.dataset.name);
+    container.querySelectorAll('.top-material').forEach(el => {
+      const name = el.dataset.name;
+      const qty = parseInt(el.dataset.qty, 10);
+      if (!name || isNaN(qty)) return;
+      initialMap.set(name, qty);
     });
 
-    // Check each component-block's top-material and if it has any .indented-material children, mark top-material as parent
-    componentBlocks.forEach(block => {
-      const topMaterial = block.querySelector('.top-material');
-      const indentedChildren = block.querySelectorAll('.indented-material');
-      if (topMaterial && indentedChildren.length > 0) {
-        parents.add(topMaterial.dataset.name);
-      }
-    });
-
-    // Now collect all materials inside the container
-    const elements = container.querySelectorAll('.indented-material, .top-material');
-
-    elements.forEach(el => {
+    container.querySelectorAll('.top-material, .indented-material').forEach(el => {
       const name = el.dataset.name;
       const qty = parseInt(el.dataset.qty, 10);
       if (!name || isNaN(qty)) return;
 
       let shouldCopy = false;
-
       if (type === 'all') {
         shouldCopy = true;
       } else if (type === 'parent') {
-        shouldCopy = parents.has(name);
+        shouldCopy = el.classList.contains('has-child');
       } else if (type === 'leaf') {
-        shouldCopy = !parents.has(name);
+        shouldCopy = el.classList.contains('is-child');
       }
 
       if (shouldCopy) {
         allMap.set(name, (allMap.get(name) || 0) + qty);
       }
     });
+
+    for (const [name, qty] of initialMap.entries()) {
+      if (!allMap.has(name)) {
+        allMap.set(name, qty);
+      }
+    }
 
     const output = Array.from(allMap.entries())
       .map(([name, qty]) => `${name} x${qty.toLocaleString()}`)
