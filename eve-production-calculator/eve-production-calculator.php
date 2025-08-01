@@ -2,7 +2,7 @@
 /*
 Plugin Name: EVE Production Calculator
 Description: Adds a shortcode [eve_production_calculator] which allows users to see the build requirements for any blueprint in EVE Online.
-Version: 0.3.15
+Version: 0.3.16
 Author: C4813
 */
 
