@@ -33,12 +33,11 @@ document.addEventListener('DOMContentLoaded', () => {
       typeIDToName = {};
       typeIDToMarketGroup = {};
       for (const [name, data] of Object.entries(nameToID)) {
-        // Your invTypes.json format keyed by name with object { typeID:..., marketGroupID:... }
+        // Handle new format where data is object { typeID, marketGroupID }
         if (typeof data === 'object' && data.typeID && data.marketGroupID) {
           typeIDToName[data.typeID] = name;
           typeIDToMarketGroup[data.typeID] = data.marketGroupID.toString();
         } else if (typeof data === 'string' || typeof data === 'number') {
-          // fallback if old format (just typeID number)
           const typeIDNum = parseInt(data);
           typeIDToName[typeIDNum] = name;
         }
@@ -130,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let html = `<h4>Materials for ${matchKey}</h4>`;
     for (const mat of materials) {
       const matName = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
-      html += `<div class="top-material">${matName} x${mat.quantity.toLocaleString()}</div>`;
+      html += `<div class="top-material">${matName} x${mat.quantity.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</div>`;
     }
     output.innerHTML = html;
 
@@ -142,46 +141,61 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function getIndentedMaterialsHTML(typeID, multiplier, depth = 1) {
-    let materials = materialMap[typeID]?.filter(m => m.activityID === 1);
-    if ((!materials || materials.length === 0) && typeIDToName[typeID]) {
-      const blueprintName = typeIDToName[typeID] + " Blueprint";
-      const blueprintID = nameToID[blueprintName] ? (typeof nameToID[blueprintName] === 'object' ? nameToID[blueprintName].typeID : parseInt(nameToID[blueprintName])) : null;
-      if (blueprintID) {
-        materials = materialMap[blueprintID]?.filter(m => m.activityID === 1);
+    async function getIndentedMaterialsHTML(typeID, multiplier, depth = 1) {
+      function getChildrenForMaterial(matID, name) {
+        let children = materialMap[matID];
+        if (!children || children.length === 0) {
+          const blueprintName = name + " Blueprint";
+          const blueprintID = nameToID[blueprintName]
+            ? (typeof nameToID[blueprintName] === "object"
+                ? nameToID[blueprintName].typeID
+                : parseInt(nameToID[blueprintName]))
+            : null;
+          if (blueprintID) {
+            children = materialMap[blueprintID];
+          }
+        }
+        return children;
       }
+    
+      let materials = materialMap[typeID]?.filter(m => m.activityID === 1);
+      if ((!materials || materials.length === 0) && typeIDToName[typeID]) {
+        const blueprintName = typeIDToName[typeID] + " Blueprint";
+        const blueprintID = nameToID[blueprintName]
+          ? (typeof nameToID[blueprintName] === "object"
+              ? nameToID[blueprintName].typeID
+              : parseInt(nameToID[blueprintName]))
+          : null;
+        if (blueprintID) {
+          materials = materialMap[blueprintID]?.filter(m => m.activityID === 1);
+        }
+      }
+    
+      if (!materials || materials.length === 0) return "";
+    
+      let html = "";
+      for (const mat of materials) {
+        const matID = mat.materialTypeID;
+        const qty = mat.quantity * multiplier;
+        if (!qty || qty <= 0) continue;
+    
+        const name = typeIDToName[matID] || `Type ID: ${matID}`;
+    
+        const children = getChildrenForMaterial(matID, name);
+    
+        let classes = `indented-material depth-${depth}`;
+        if (Array.isArray(children) && children.some(m => m.activityID === 1)) {
+          classes += " has-child";
+        } else {
+          classes += " is-child";
+        }
+    
+        html += `<div class="${classes}" data-name="${name}" data-qty="${qty}">${name} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[matID]) ? "YES" : "NO"}</div>`;
+        html += await getIndentedMaterialsHTML(matID, qty, depth + 1);
+      }
+    
+      return html;
     }
-
-    if (!materials || materials.length === 0) return '';
-
-    let html = '';
-    for (const mat of materials) {
-      const matID = mat.materialTypeID;
-      const qty = mat.quantity * multiplier;
-      if (!qty || qty <= 0) continue;
-
-      const name = typeIDToName[matID] || `Type ID: ${matID}`;
-
-      // Check if this material has children
-      let children = materialMap[matID];
-      if ((!children || children.length === 0) && nameToID[name + " Blueprint"]) {
-        const blueprintID = nameToID[name + " Blueprint"];
-        children = materialMap[blueprintID];
-      }
-
-      let classes = `indented-material depth-${depth}`;
-      if (Array.isArray(children) && children.some(m => m.activityID === 1)) {
-        classes += ' has-child';
-      } else {
-        classes += ' is-child';
-      }
-
-      html += `<div class="${classes}" data-name="${name}" data-qty="${qty}">${name} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[matID]) ? "YES" : "NO"}</div>`;
-      html += await getIndentedMaterialsHTML(matID, qty, depth + 1);
-    }
-
-    return html;
-  }
 
   async function resolveAllLayers() {
     await initializeData();
@@ -200,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         componentHTML = `<div class="indented-material depth-1" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</div>`;
       }
 
-      let html = `<div class="component-block"><strong>${matName} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</strong>`;
+      let html = `<div class="component-block"><strong class="top-material" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</strong>`;
       html += componentHTML;
       html += '</div>';
 
