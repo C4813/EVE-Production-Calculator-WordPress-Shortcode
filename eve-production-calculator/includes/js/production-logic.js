@@ -1,4 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
+  function escapeHTML(str) {
+    if (str == null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   const materialsUrl = productionCalculatorVars.materialsUrl;
   const nameidUrl = productionCalculatorVars.nameidUrl;
   const marketGroupsUrl = productionCalculatorVars.marketGroupsUrl;
@@ -118,7 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
       let classes = `indented-material depth-${depth}`;
       classes += hasChildren ? " has-child" : " is-child";
 
-      html += `<div class="${classes}" data-name="${name}" data-qty="${qty}">${name} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[matID]) ? "YES" : "NO"}</div>`;
+      const childIsShip = isShip(typeIDToMarketGroup[matID]) ? '1' : '0';
+
+      html += `<div class="${classes}" data-isship="${childIsShip}" data-name="${name}" data-qty="${qty}">${escapeHTML(name)} x${qty.toLocaleString()}</div>`;
 
       if (hasChildren && !alreadySeen) {
         html += await getIndentedMaterialsHTMLUnique(matID, qty, depth + 1, seen);
@@ -211,11 +223,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const hasChildren = !!children;
 
       const topClass = `indented-material depth-1 ${hasChildren ? 'has-child' : 'is-child'}`;
+      const topIsShip = isShip(typeIDToMarketGroup[mat.materialTypeID]) ? '1' : '0';
 
       const componentHTML = await getIndentedMaterialsHTMLUnique(mat.materialTypeID, qty, 1, seen);
 
       let html = `<div class="component-block">`;
-      html += `<div class="${topClass}" data-name="${matName}" data-qty="${qty}">${matName} x${qty.toLocaleString()} ${isShip(typeIDToMarketGroup[mat.materialTypeID]) ? "YES" : "NO"}</div>`;
+      html += `<div class="${topClass}" data-isship="${topIsShip}" data-name="${matName}" data-qty="${qty}">${escapeHTML(matName)} x${qty.toLocaleString()}</div>`;
       html += componentHTML;
       html += '</div>';
 
@@ -228,51 +241,112 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('copy-all-btn').style.display = 'none';
   }
 
-  function copyResolvedLayers(type) {
-    const container = document.getElementById('eve-materials-recursive-output');
-    const allMap = new Map();
-    const initialMap = new Map();
+  
 
-    container.querySelectorAll('.top-material').forEach(el => {
-      const name = el.dataset.name;
-      const qty = parseInt(el.dataset.qty, 10);
-      if (!name || isNaN(qty)) return;
-      initialMap.set(name, qty);
-    });
+function copyResolvedLayers(type) {
 
-    container.querySelectorAll('.top-material, .indented-material').forEach(el => {
-      const name = el.dataset.name;
-      const qty = parseInt(el.dataset.qty, 10);
-      if (!name || isNaN(qty)) return;
+  const container = document.getElementById('eve-materials-recursive-output');
+  if (!container) return;
+  const allMap = new Map();
 
-      let shouldCopy = false;
-      if (type === 'all') {
-        shouldCopy = true;
-      } else if (type === 'parent') {
-        shouldCopy = el.classList.contains('has-child');
-      } else if (type === 'leaf') {
-        shouldCopy = el.classList.contains('is-child');
-      }
+  const copyFromCurrentMaterials = () => {
+    if (!Array.isArray(currentMaterials) || currentMaterials.length === 0) return false;
+    for (const mat of currentMaterials) {
+      const name = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
+      const qty = mat.quantity;
+      if (!name || !qty) continue;
+      allMap.set(name, (allMap.get(name) || 0) + qty);
+    }
+    return true;
+  };
 
-      if (shouldCopy) {
-        allMap.set(name, (allMap.get(name) || 0) + qty);
-      }
-    });
+  if (type === 'parent') {
+    if (!Array.isArray(currentMaterials) || currentMaterials.length === 0) return;
 
-    for (const [name, qty] of initialMap.entries()) {
-      if (!allMap.has(name)) {
-        allMap.set(name, qty);
+    // 1) Top-level parents: add only NON-ship items
+    for (const mat of currentMaterials) {
+      const mgid = typeIDToMarketGroup[mat.materialTypeID];
+      if (isShip(mgid)) continue; // skip ship hull itself
+      const name = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
+      const qty = mat.quantity;
+      if (!name || !qty) continue;
+      allMap.set(name, (allMap.get(name) || 0) + qty);
+    }
+
+    // 2) For any top-level that IS a ship hull, include ONLY its immediate parents
+    for (const mat of currentMaterials) {
+      const mgid = typeIDToMarketGroup[mat.materialTypeID];
+      if (!isShip(mgid)) continue;
+      const name = typeIDToName[mat.materialTypeID] || `Type ID: ${mat.materialTypeID}`;
+      const children = getChildrenForMaterial(mat.materialTypeID, name);
+      if (!Array.isArray(children)) continue;
+      for (const c of children) {
+        const childName = typeIDToName[c.materialTypeID] || `Type ID: ${c.materialTypeID}`;
+        const childQty = (c.quantity || 0) * (mat.quantity || 1);
+        if (!childName || !childQty) continue;
+        allMap.set(childName, (allMap.get(childName) || 0) + childQty);
       }
     }
 
-    const output = Array.from(allMap.entries())
-      .map(([name, qty]) => `${name} x${qty.toLocaleString()}`)
-      .join('\n');
+  } else if (type === 'all') {
+    // Use resolved DOM if present; otherwise fallback to base currentMaterials
+    const nodes = Array.from(container.querySelectorAll('.indented-material'));
+    if (nodes.length > 0) {
+      nodes.forEach(el => {
+        const name = el.dataset.name;
+        const qty = parseInt(el.dataset.qty, 10);
+        if (!name || isNaN(qty)) return;
+        allMap.set(name, (allMap.get(name) || 0) + qty);
+      });
+    } else {
+      if (!copyFromCurrentMaterials()) return;
+    }
 
-    navigator.clipboard.writeText(output);
+  } else if (type === 'leaf') {
+    const nodes = Array.from(container.querySelectorAll('.indented-material.is-child'));
+    if (nodes.length === 0) {
+      if (!copyFromCurrentMaterials()) return;
+    } else {
+      nodes.forEach(el => {
+        const name = el.dataset.name;
+        const qty = parseInt(el.dataset.qty, 10);
+        if (!name || isNaN(qty)) return;
+        allMap.set(name, (allMap.get(name) || 0) + qty);
+      });
+    }
   }
 
-  document.getElementById('calculate-btn').addEventListener('click', lookupMaterials);
+  const output = Array.from(allMap.entries())
+    .map(([name, qty]) => `${name} x${qty.toLocaleString()}`)
+    .join('\n');
+  if (!output) return;
+
+  // Clipboard with fallback
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(output).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = output;
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = output;
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+}
+
+document.getElementById('calculate-btn').addEventListener('click', lookupMaterials);
   document.getElementById('resolve-btn').addEventListener('click', resolveAllLayers);
   document.getElementById('copy-parent-btn').addEventListener('click', () => copyResolvedLayers('parent'));
   document.getElementById('copy-leaf-btn').addEventListener('click', () => copyResolvedLayers('leaf'));
