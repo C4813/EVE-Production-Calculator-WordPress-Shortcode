@@ -28,7 +28,8 @@
       <select id="hull-sec">
         <option>HighSec</option>
         <option>LowSec</option>
-        <option>NullSec/JSpace</option>
+        <option>NullSec</option>
+        <option>Wormhole</option>
       </select>
     </label>
     <label>Implant
@@ -40,7 +41,7 @@
       </select>
     </label>
     <label>Tax (%):
-      <input type="number" id="hull-other-mod" min="0" max="100" value="0" />
+      <input type="text" id="hull-other-mod" inputmode="decimal" aria-label="Hull Tax Percentage" value="0" />
     </label>
   </div>
 
@@ -75,7 +76,8 @@
       <select id="comp-sec">
         <option>HighSec</option>
         <option>LowSec</option>
-        <option>NullSec/JSpace</option>
+        <option>NullSec</option>
+        <option>Wormhole</option>
       </select>
     </label>
     <label>Implant
@@ -87,7 +89,7 @@
       </select>
     </label>
     <label>Tax (%)
-      <input type="number" id="comp-other-mod" min="0" max="100" value="0" />
+      <input type="text" id="comp-other-mod" inputmode="decimal" aria-label="Component Tax Percentage" value="0" />
     </label>
   </div>
 </div>
