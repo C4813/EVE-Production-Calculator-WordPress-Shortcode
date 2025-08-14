@@ -52,6 +52,18 @@
     text-align: center;
 }
 
+/* FIX: make the two Tax (%) inputs match the dropdown width & styling */
+.production-column input[type="text"]#hull-other-mod,
+.production-column input[type="text"]#comp-other-mod {
+    width: 80%;
+    padding: 6px 8px;
+    font-size: 1em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
 .eve-materials-container input[type="text"] {
     padding: 8px;
     width: 60%;
@@ -96,37 +108,17 @@
     white-space: pre-line;
 }
 
-.depth-1 {
-    margin-left: 20px;
-}
-.depth-2 {
-    margin-left: 40px;
-}
-.depth-3 {
-    margin-left: 60px;
-}
-.depth-4 {
-    margin-left: 80px;
-}
-.depth-5 {
-    margin-left: 100px;
-}
-.depth-6 {
-    margin-left: 120px;
-}
-.depth-7 {
-    margin-left: 140px;
-}
+.depth-1 { margin-left: 20px; }
+.depth-2 { margin-left: 40px; }
+.depth-3 { margin-left: 60px; }
+.depth-4 { margin-left: 80px; }
+.depth-5 { margin-left: 100px; }
+.depth-6 { margin-left: 120px; }
+.depth-7 { margin-left: 140px; }
 
-.indented-material.has-child {
-    font-weight: bold;
-}
-.has-child {
-    font-weight: bold;
-}
-.indented-material.is-child {
-    font-weight: normal;
-}
+.indented-material.has-child { font-weight: bold; }
+.has-child { font-weight: bold; }
+.indented-material.is-child { font-weight: normal; }
 
 button#copy-all-btn,
 button#copy-parent-btn,
