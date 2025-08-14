@@ -1,4 +1,68 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Enforce positive decimal input and auto-select on focus for tax (%) fields
+  function setupPositiveDecimalInputById(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // Use a text input style sanitation to allow decimals robustly across locales
+    const selectAll = () => el.select();
+    el.setAttribute('inputmode', 'decimal');
+
+    // Auto-select when focusing/clicking
+    el.addEventListener('focus', selectAll);
+    el.addEventListener('click', selectAll);
+    el.addEventListener('mouseup', (e) => { e.preventDefault(); });
+
+    // Allow digits and one decimal separator ('.' or ','); convert ',' -> '.'
+    function sanitize(raw) {
+      if (raw == null) return '';
+      let v = String(raw).replace(',', '.');
+      v = v.replace(/[^\d.]/g, '');
+      const firstDot = v.indexOf('.');
+      if (firstDot !== -1) {
+        v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+      }
+      if (v.startsWith('.')) v = '0' + v;     // ".5" → "0.5"
+      v = v.replace(/^-+/, '');               // no negatives
+      return v;
+    }
+
+    el.addEventListener('beforeinput', (e) => {
+      const data = e.data;
+      if (data == null) return;
+      if (!/[0-9.,]/.test(data)) e.preventDefault();
+    });
+
+    el.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      const clean = sanitize(text);
+      document.execCommand('insertText', false, clean);
+    });
+
+    el.addEventListener('input', () => {
+      const before = el.value;
+      const after = sanitize(before);
+      if (before !== after) {
+        el.value = after;
+        try { el.setSelectionRange(after.length, after.length); } catch {}
+      }
+    });
+
+    el.addEventListener('blur', () => {
+      const v = sanitize(el.value);
+      if (v === '' || v === '.') { el.value = ''; return; }
+      const num = Number(v);
+      if (isNaN(num)) { el.value = ''; return; }
+      const clamped = Math.max(0, Math.min(100, num));
+      el.value = String(clamped);
+    });
+  }
+
+  // Apply to known tax inputs
+  setupPositiveDecimalInputById('hull-other-mod');
+  setupPositiveDecimalInputById('comp-other-mod');
+
   function escapeHTML(str) {
     if (str == null) return "";
     return String(str)
@@ -10,50 +74,53 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const materialsUrl = productionCalculatorVars.materialsUrl;
-  const nameidUrl = productionCalculatorVars.nameidUrl;
+  const invTypesUrl = productionCalculatorVars.nameidUrl;
   const marketGroupsUrl = productionCalculatorVars.marketGroupsUrl;
 
   let materialData = null;
   let nameToID = null;
   let typeIDToName = {};
+  let typeIDToMarketGroup = {};
   let materialMap = {};
   let marketGroups = null;
-  let typeIDToMarketGroup = {};
 
   let currentMaterials = [];
   let currentRootTypeID = null;
   let currentRootName = null;
 
-  async function loadJSON(url) {
+  // Robust JSON fetch helper (avoids scope issues with prior 'loadJSON' references)
+  const fetchJSON = async (url) => {
     const res = await fetch(url);
     if (!res.ok) throw new Error('Could not load ' + url);
     return res.json();
-  }
+  };
 
   async function initializeData() {
     if (!materialData) {
-      materialData = await loadJSON(materialsUrl);
+      materialData = await fetchJSON(materialsUrl);
       materialMap = {};
       for (const entry of materialData) {
         materialMap[parseInt(entry.typeID)] = entry.materials;
       }
     }
     if (!nameToID) {
-      nameToID = await loadJSON(nameidUrl);
+      nameToID = await fetchJSON(invTypesUrl);
       typeIDToName = {};
       typeIDToMarketGroup = {};
       for (const [name, data] of Object.entries(nameToID)) {
         if (typeof data === 'object' && data.typeID && data.marketGroupID) {
           typeIDToName[data.typeID] = name;
-          typeIDToMarketGroup[data.typeID] = data.marketGroupID.toString();
-        } else if (typeof data === 'string' || typeof data === 'number') {
-          const typeIDNum = parseInt(data);
-          typeIDToName[typeIDNum] = name;
+          typeIDToMarketGroup[data.typeID] = data.marketGroupID;
+        } else {
+          const typeIDNum = parseInt(data, 10);
+          if (!Number.isNaN(typeIDNum)) {
+            typeIDToName[typeIDNum] = name;
+          }
         }
       }
     }
     if (!marketGroups) {
-      marketGroups = await loadJSON(marketGroupsUrl);
+      marketGroups = await fetchJSON(marketGroupsUrl);
     }
   }
 
