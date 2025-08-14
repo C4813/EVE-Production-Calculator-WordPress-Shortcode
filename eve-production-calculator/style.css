@@ -121,6 +121,12 @@
 .indented-material.has-child {
     font-weight: bold;
 }
+.has-child {
+    font-weight: bold;
+}
+.indented-material.is-child {
+    font-weight: normal;
+}
 
 button#copy-all-btn,
 button#copy-parent-btn,
